@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: prospect2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prospect
+      POSTGRES_PASSWORD: prospect
+      POSTGRES_DB: prospect2
+    ports:
+      - "5432:5432"
+    volumes:
+      - prospect2_pgdata:/var/lib/postgresql/data
+
+volumes:
+  prospect2_pgdata:
