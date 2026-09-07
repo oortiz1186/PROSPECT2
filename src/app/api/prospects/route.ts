@@ -8,29 +8,36 @@ export async function GET(request: Request) {
   const status = searchParams.get("status") as ProspectStatus | null;
   const size = searchParams.get("size") as ProspectSize | null;
   const priority = searchParams.get("priority")?.trim();
+  const dataset = searchParams.get("dataset")?.trim();
 
-  const prospects = await prisma.prospect.findMany({
-    where: {
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { segment: { contains: q, mode: "insensitive" } },
-              { neighborhood: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q } },
-              { email: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(status ? { status } : {}),
-      ...(size ? { size } : {}),
-      ...(priority ? { priority } : {}),
-    },
-    orderBy: [{ priority: "asc" }, { score: "desc" }, { name: "asc" }],
-    take: 500,
-  });
+  try {
+    const prospects = await prisma.prospect.findMany({
+      where: {
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { segment: { contains: q, mode: "insensitive" } },
+                { neighborhood: { contains: q, mode: "insensitive" } },
+                { phone: { contains: q } },
+                { email: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+        ...(status ? { status } : {}),
+        ...(size ? { size } : {}),
+        ...(priority ? { priority } : {}),
+        ...(dataset ? { businessType: dataset } : {}),
+      },
+      orderBy: [{ priority: "asc" }, { score: "desc" }, { name: "asc" }],
+      take: 500,
+    });
 
-  return NextResponse.json(prospects);
+    return NextResponse.json(prospects);
+  } catch (error) {
+    console.error("GET /api/prospects", error);
+    return NextResponse.json({ error: "No fue posible consultar los prospectos." }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
