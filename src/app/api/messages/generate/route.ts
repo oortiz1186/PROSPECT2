@@ -14,8 +14,12 @@ export async function POST(request: Request) {
     businessName: prospect.name,
     contactName: prospect.contactName,
     segment: prospect.segment,
+    businessType: prospect.businessType,
     offer: prospect.suggestedOffer,
     price: prospect.suggestedPrice,
+    salesArgument: prospect.salesArgument,
+    website: prospect.website,
+    status: prospect.status,
   });
 
   const saved = await prisma.generatedMessage.create({
