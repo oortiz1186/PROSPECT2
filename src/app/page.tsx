@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type Interaction = {
+  id: string;
+  channel: string;
+  summary: string;
+  happenedAt: string;
+};
+
 type Prospect = {
   id: string;
   name: string;
@@ -22,9 +29,11 @@ type Prospect = {
   salesArgument?: string | null;
   notes?: string | null;
   nextFollowUpAt?: string | null;
+  lastContactAt?: string | null;
   score: number;
   priority: string;
   status: string;
+  interactions?: Interaction[];
 };
 
 type MessageType = "FIRST_CONTACT" | "FOLLOW_UP" | "WEB" | "SUPPORT" | "AUTOMATION" | "QUOTE";
@@ -52,6 +61,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [interactionChannel, setInteractionChannel] = useState("WHATSAPP");
+  const [interactionSummary, setInteractionSummary] = useState("");
 
   async function load() {
     try {
@@ -79,8 +90,21 @@ export default function HomePage() {
     contacted: prospects.filter(p => ["CONTACTED","RESPONDED"].includes(p.status)).length,
     interested: prospects.filter(p => ["INTERESTED","QUOTED"].includes(p.status)).length,
     won: prospects.filter(p => p.status === "WON").length,
-    incomplete: prospects.filter(p => !p.phone && !p.whatsapp || !p.website || !p.email).length,
+    incomplete: prospects.filter(p => ((!p.phone && !p.whatsapp) || !p.website || !p.email)).length,
   }), [prospects]);
+
+  async function selectProspect(p: Prospect) {
+    setGenerated("");
+    setCopied(false);
+    setInteractionSummary("");
+    try {
+      const r = await fetch(`/api/prospects/${p.id}`, { cache: "no-store" });
+      const detail = await r.json();
+      setSelected(r.ok ? detail : p);
+    } catch {
+      setSelected(p);
+    }
+  }
 
   async function updateProspect(p: Prospect, patch: Partial<Prospect>) {
     const r = await fetch(`/api/prospects/${p.id}`, {
@@ -90,9 +114,22 @@ export default function HomePage() {
     });
     const updated = await r.json();
     if (!r.ok) throw new Error(updated?.error || "No se pudo guardar el prospecto");
-    setProspects(items => items.map(x => x.id === p.id ? updated : x));
-    if (selected?.id === p.id) setSelected(updated);
+    setProspects(items => items.map(x => x.id === p.id ? {...x,...updated} : x));
+    if (selected?.id === p.id) setSelected({...selected,...updated});
     return updated as Prospect;
+  }
+
+  async function addInteraction() {
+    if (!selected || !interactionSummary.trim()) return;
+    const r = await fetch(`/api/prospects/${selected.id}/interactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: interactionChannel, summary: interactionSummary }),
+    });
+    const data = await r.json();
+    if (!r.ok) return alert(data?.error || "No se pudo registrar el contacto");
+    setSelected({...selected, lastContactAt: new Date().toISOString(), interactions: [data, ...(selected.interactions || [])]});
+    setInteractionSummary("");
   }
 
   async function generateMessage(p: Prospect, openWhatsApp = false) {
@@ -128,12 +165,6 @@ export default function HomePage() {
     } finally { setLoading(false); }
   }
 
-  function selectProspect(p: Prospect) {
-    setSelected(p);
-    setGenerated("");
-    setCopied(false);
-  }
-
   const missing = selected ? [
     !selected.phone && !selected.whatsapp ? "Teléfono / WhatsApp" : null,
     !selected.email ? "Email" : null,
@@ -145,10 +176,7 @@ export default function HomePage() {
   return (
     <main className="page">
       <header className="header">
-        <div>
-          <h1>PROSPECT2</h1>
-          <p>CRM de prospección y seguimiento comercial.</p>
-        </div>
+        <div><h1>PROSPECT2</h1><p>CRM de prospección y seguimiento comercial.</p></div>
         <form action={importFile} className="importer">
           <input name="file" type="file" accept=".xlsx,.xls,.csv" required />
           <select name="dataset" defaultValue="Pequeñas empresas"><option>Pequeñas empresas</option><option>Medianas empresas</option></select>
@@ -177,12 +205,10 @@ export default function HomePage() {
       </section>
 
       <section className={view === "LIST" ? "layout" : "layout kanbanLayout"}>
-        <div>
-          {view === "LIST" ? <ProspectTable prospects={prospects} selected={selected} onSelect={selectProspect} /> : <Kanban prospects={prospects} onSelect={selectProspect} onStatus={async (p,s) => { await updateProspect(p,{status:s}); }} />}
-        </div>
+        <div>{view === "LIST" ? <ProspectTable prospects={prospects} selected={selected} onSelect={selectProspect} /> : <Kanban prospects={prospects} onSelect={selectProspect} onStatus={async (p,s) => { await updateProspect(p,{status:s}); }} />}</div>
 
         <aside className="panel">
-          {!selected ? <div className="emptyPanel"><strong>Selecciona un prospecto</strong><p>Aquí podrás completar datos, preparar el mensaje y dar seguimiento.</p></div> : <>
+          {!selected ? <div className="emptyPanel"><strong>Selecciona un prospecto</strong><p>Aquí podrás completar datos, preparar mensajes y dar seguimiento.</p></div> : <>
             <div className="panelTitle"><div><h2>{selected.name}</h2><span className={`badge priority ${selected.priority}`}>Prioridad {selected.priority} · {selected.score}</span></div><span className="datasetBadge">{selected.businessType || selected.size}</span></div>
 
             {missing.length > 0 && <div className="missingBox"><strong>Falta completar</strong><div>{missing.map(x => <span key={String(x)}>{x}</span>)}</div></div>}
@@ -211,6 +237,12 @@ export default function HomePage() {
               <div className="messageHeader"><strong>Mensaje comercial</strong><select value={messageType} onChange={e => setMessageType(e.target.value as MessageType)}>{Object.entries(messageLabels).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div className="messageActions"><button onClick={() => generateMessage(selected,false)}>Generar</button><button onClick={() => generateMessage(selected,true)}>Abrir WhatsApp</button><button className="secondary" disabled={!generated} onClick={copyMessage}>{copied ? "Copiado ✓" : "Copiar"}</button></div>
               {generated && <textarea className="message" value={generated} onChange={e => setGenerated(e.target.value)} rows={8} />}
+            </div>
+
+            <div className="historyBox">
+              <div className="historyTitle"><strong>Historial de contacto</strong>{selected.lastContactAt && <small>Último: {new Date(selected.lastContactAt).toLocaleString("es-MX")}</small>}</div>
+              <div className="interactionForm"><select value={interactionChannel} onChange={e => setInteractionChannel(e.target.value)}><option>WHATSAPP</option><option>PHONE</option><option>EMAIL</option><option>FACEBOOK</option><option>INSTAGRAM</option><option>LINKEDIN</option><option>OTHER</option></select><input value={interactionSummary} onChange={e => setInteractionSummary(e.target.value)} placeholder="Ej. Respondió, pide información el viernes..."/><button onClick={addInteraction}>Registrar</button></div>
+              <div className="historyList">{(selected.interactions || []).length === 0 ? <p className="muted">Aún no hay contactos registrados.</p> : (selected.interactions || []).map(i => <div className="historyItem" key={i.id}><div><strong>{i.channel}</strong><span>{new Date(i.happenedAt).toLocaleString("es-MX")}</span></div><p>{i.summary}</p></div>)}</div>
             </div>
           </>}
         </aside>
