@@ -13,17 +13,17 @@ export async function GET(request: Request) {
   try {
     const prospects = await prisma.prospect.findMany({
       where: {
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q, mode: "insensitive" } },
-                { segment: { contains: q, mode: "insensitive" } },
-                { neighborhood: { contains: q, mode: "insensitive" } },
-                { phone: { contains: q } },
-                { email: { contains: q, mode: "insensitive" } },
-              ],
-            }
-          : {}),
+        ...(q ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { segment: { contains: q, mode: "insensitive" } },
+            { address: { contains: q, mode: "insensitive" } },
+            { neighborhood: { contains: q, mode: "insensitive" } },
+            { postalCode: { contains: q } },
+            { phone: { contains: q } },
+            { email: { contains: q, mode: "insensitive" } },
+          ],
+        } : {}),
         ...(status ? { status } : {}),
         ...(size ? { size } : {}),
         ...(priority ? { priority } : {}),
@@ -32,7 +32,6 @@ export async function GET(request: Request) {
       orderBy: [{ priority: "asc" }, { score: "desc" }, { name: "asc" }],
       take: 500,
     });
-
     return NextResponse.json(prospects);
   } catch (error) {
     console.error("GET /api/prospects", error);
