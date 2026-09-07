@@ -30,13 +30,22 @@ export default function HomePage() {
   const [selected, setSelected] = useState<Prospect | null>(null);
   const [generated, setGenerated] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function load() {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status) params.set("status", status);
-    const r = await fetch(`/api/prospects?${params.toString()}`, { cache: "no-store" });
-    setProspects(await r.json());
+    try {
+      setError("");
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (status) params.set("status", status);
+      const r = await fetch(`/api/prospects?${params.toString()}`, { cache: "no-store" });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(data?.error || "No fue posible cargar los prospectos.");
+      setProspects(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setProspects([]);
+      setError(e instanceof Error ? e.message : "No fue posible cargar los prospectos.");
+    }
   }
 
   useEffect(() => { load(); }, [status]);
@@ -72,11 +81,17 @@ export default function HomePage() {
 
   async function importFile(form: FormData) {
     setLoading(true);
-    const r = await fetch("/api/import", { method: "POST", body: form });
-    const data = await r.json();
-    alert(`Importados: ${data.imported ?? 0}`);
-    await load();
-    setLoading(false);
+    try {
+      const r = await fetch("/api/import", { method: "POST", body: form });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(data?.error || "No se pudo importar el archivo.");
+      alert(`Importados: ${data.imported ?? 0}`);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo importar el archivo.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -95,6 +110,8 @@ export default function HomePage() {
           <button disabled={loading}>{loading ? "Importando..." : "Importar Excel"}</button>
         </form>
       </header>
+
+      {error && <div style={{padding:"12px 14px", border:"1px solid #e11d48", borderRadius:8, marginBottom:16, background:"#fff1f2", color:"#9f1239"}}>{error}</div>}
 
       <section className="metrics">
         <Card label="Prospectos" value={metrics.total} />
