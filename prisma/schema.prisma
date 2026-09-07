@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProspectSize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  UNKNOWN
+}
+
+enum ProspectStatus {
+  PENDING
+  RESEARCHED
+  CONTACTED
+  RESPONDED
+  INTERESTED
+  QUOTED
+  WON
+  LOST
+  DISCARDED
+}
+
+enum ContactChannel {
+  WHATSAPP
+  PHONE
+  EMAIL
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  OTHER
+}
+
+model Prospect {
+  id               String         @id @default(cuid())
+  name             String
+  segment          String?
+  businessType     String?
+  size             ProspectSize   @default(UNKNOWN)
+  employeeRange    String?
+  address          String?
+  neighborhood     String?
+  city             String         @default("León")
+  state            String         @default("Guanajuato")
+  postalCode       String?
+  phone            String?
+  whatsapp         String?
+  email            String?
+  website          String?
+  contactName      String?
+  facebook         String?
+  instagram        String?
+  source            String?
+  sourceUrl         String?
+  score             Int            @default(0)
+  priority          String         @default("C")
+  status            ProspectStatus @default(PENDING)
+  suggestedOffer    String?
+  suggestedPrice    String?
+  salesArgument     String?
+  initialMessage    String?
+  notes             String?
+  lastContactAt     DateTime?
+  nextFollowUpAt    DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  interactions      Interaction[]
+  generatedMessages GeneratedMessage[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([size])
+  @@index([segment])
+}
+
+model Interaction {
+  id         String         @id @default(cuid())
+  prospectId String
+  prospect   Prospect       @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  channel    ContactChannel
+  summary    String
+  happenedAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  @@index([prospectId, happenedAt])
+}
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  channel     ContactChannel
+  body        String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GeneratedMessage {
+  id          String   @id @default(cuid())
+  prospectId  String
+  prospect    Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  templateId  String?
+  channel     ContactChannel
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@index([prospectId, createdAt])
+}
